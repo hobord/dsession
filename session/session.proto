@@ -1,0 +1,49 @@
+syntax = "proto3";
+package hobord.session;
+option go_package = "session";
+import "google/protobuf/struct.proto";
+
+service DSessionService {
+  rpc GetSession(GetSessionMessage) returns (SessionResponse) {}
+  rpc CreateSession(CreateSessionMessage) returns (SessionResponse) {}
+  rpc AddValueToSession(AddValueToSessionMessage) returns (SessionResponse) {}
+  rpc InvalidateSession(InvalidateSessionMessage) returns (SuccessMessage) {}
+  rpc InvalidateSessionValue(InvalidateSessionValueMessage) returns (SuccessMessage) {}
+}
+
+message SuccessMessage {
+  bool Successfull = 1;
+}
+
+message CreateSessionMessage {
+  int64 ttl = 1;
+}
+
+message GetSessionMessage {
+  string id = 1;
+}
+
+message AddValueToSessionMessage {
+  string id = 1; // session id
+  string key = 2; // key in session
+  google.protobuf.Value value = 3; // value
+}
+
+message SessionValue {
+  string key = 1; // key in session
+  google.protobuf.Value value = 2; // value
+}
+
+message SessionResponse {
+  string id = 1; // session id
+  repeated SessionValue values = 2; // values
+}
+
+message InvalidateSessionMessage {
+  string id = 1; // session id
+}
+
+message InvalidateSessionValueMessage {
+  string id = 1; // session id
+  string key = 2; // key in session
+}
