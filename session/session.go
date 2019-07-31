@@ -7,8 +7,8 @@ import (
 
 	"encoding/json"
 
+	st "github.com/golang/protobuf/ptypes/struct"
 	"github.com/gomodule/redigo/redis"
-	mapstructure "github.com/mitchellh/mapstructure"
 	"github.com/nitishm/go-rejson"
 	uuid "github.com/satori/go.uuid"
 )
@@ -29,7 +29,7 @@ func (s *Server) CreateSession(ctx context.Context, in *CreateSessionMessage) (*
 	RedisJSON := s.RedisJSON
 
 	uuid, err := uuid.NewV4()
-	values := []*SessionValue{}
+	var values map[string]*st.Value
 	if err != nil {
 		fmt.Printf("Something went wrong: %s", err)
 		return &SessionResponse{Id: "", Values: values}, err
@@ -60,30 +60,33 @@ func (s *Server) CreateSession(ctx context.Context, in *CreateSessionMessage) (*
 func (s *Server) AddValueToSession(ctx context.Context, in *AddValueToSessionMessage) (*SessionResponse, error) {
 	RedisConnection := s.RedisConnection
 	RedisJSON := s.RedisJSON
+	var values map[string]*st.Value
 
-	key := in.Key
-	val := in.Value
-
-	res, err := RedisJSON.JSONSet(in.Id, "."+key, val)
+	res, err := RedisJSON.JSONSet(in.Id, "."+in.Key, in.Value)
 	if err != nil {
-		return &SessionResponse{Id: "", Values: []*SessionValue{}}, err
+		return &SessionResponse{Id: "", Values: values}, err
 	}
 	if res.(string) != "OK" {
 		fmt.Println("Failed to Set into the Redis: ")
-		return &SessionResponse{Id: "", Values: []*SessionValue{}}, err
+		return &SessionResponse{Id: "", Values: values}, err
 	}
 	RedisConnection.Flush()
 
 	session, err := s.getValuesBySessionID(in.Id)
 	if err != nil {
-		return &SessionResponse{Id: "", Values: []*SessionValue{}}, err
+		return &SessionResponse{Id: "", Values: values}, err
 	}
 
 	return session, nil
 }
 func (s *Server) GetSession(ctx context.Context, in *GetSessionMessage) (*SessionResponse, error) {
-	values := []*SessionValue{}
-	return &SessionResponse{Id: "sadas", Values: values}, nil
+	session, err := s.getValuesBySessionID(in.Id)
+	if err != nil {
+		var values map[string]*st.Value
+		return &SessionResponse{Id: "", Values: values}, err
+	}
+
+	return session, nil
 }
 
 func (s *Server) InvalidateSession(ctx context.Context, in *InvalidateSessionMessage) (*SuccessMessage, error) {
@@ -95,21 +98,21 @@ func (s *Server) InvalidateSessionValue(ctx context.Context, in *InvalidateSessi
 
 func (s *Server) getValuesBySessionID(id string) (*SessionResponse, error) {
 	RedisJSON := s.RedisJSON
+	response := &SessionResponse{Id: id, Values: make(map[string]*st.Value)}
+	var jsonValue map[string]interface{}
 
-	values := []*SessionValue{}
 	input, err := redis.Bytes(RedisJSON.JSONGet(id, "."))
-	sessJSON := Session{}
-	err = json.Unmarshal(input, &sessJSON)
 	if err != nil {
-		// log.Fatalf("Failed to JSONGet")
-		return &SessionResponse{Id: "", Values: []*SessionValue{}}, err
+		var values map[string]*st.Value
+		return &SessionResponse{Id: "", Values: values}, err
 	}
 
-	var result Session
-	err = mapstructure.Decode(sessJSON, &result)
-	if err != nil {
-		panic(err)
+	json.Unmarshal(input, &jsonValue)
+
+	for key, _ := range jsonValue {
+		fmt.Println(key)
+		response.Values[key] = ToValue(jsonValue[key])
 	}
 
-	return &SessionResponse{Id: id, Values: values}, nil
+	return response, nil
 }

@@ -6,9 +6,8 @@
 grpcurl.exe -plaintext localhost:50051 list
 
 grpcurl -plaintext -d '{"ttl":10}' localhost:50051 hobord.session.DSessionService/CreateSession
-{
-  "id": "sadas"
-}
+grpcurl -plaintext -d '{"id":"746b8deb-2629-4318-9a0d-1928798e85ad", "key":"foo", "value": {"numberValue": 15}}' localhost:50051 hobord.session.DSessionService/AddValueToSession
+
 */
 
 package main

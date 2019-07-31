@@ -23,20 +23,37 @@ message GetSessionMessage {
   string id = 1;
 }
 
+// enum NullValue {
+//   // Null value.
+//   NULL_VALUE = 0;
+// }
+
+// message Value {
+//   // The kind of value.
+//   oneof kind {
+//     // Represents a null value.
+//     NullValue null_value = 1;
+//     // Represents a double value.
+//     double number_value = 2;
+//     // Represents a string value.
+//     string string_value = 3;
+//     // Represents a boolean value.
+//     bool bool_value = 4;
+//   }
+// }
+
+
 message AddValueToSessionMessage {
   string id = 1; // session id
   string key = 2; // key in session
   google.protobuf.Value value = 3; // value
-}
-
-message SessionValue {
-  string key = 1; // key in session
-  google.protobuf.Value value = 2; // value
+  // Value value = 3;
 }
 
 message SessionResponse {
   string id = 1; // session id
-  repeated SessionValue values = 2; // values
+  map<string, google.protobuf.Value> values = 2; // values
+  // map<string, Value> values = 2; // values
 }
 
 message InvalidateSessionMessage {
