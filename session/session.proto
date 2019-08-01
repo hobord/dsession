@@ -7,8 +7,10 @@ service DSessionService {
   rpc GetSession(GetSessionMessage) returns (SessionResponse) {}
   rpc CreateSession(CreateSessionMessage) returns (SessionResponse) {}
   rpc AddValueToSession(AddValueToSessionMessage) returns (SessionResponse) {}
-  rpc InvalidateSession(InvalidateSessionMessage) returns (SuccessMessage) {}
+  rpc AddValuesToSession(AddValuesToSessionMessage) returns (SessionResponse) {}
   rpc InvalidateSessionValue(InvalidateSessionValueMessage) returns (SuccessMessage) {}
+  rpc InvalidateSessionValues(InvalidateSessionValueMessage) returns (SuccessMessage) {}
+  rpc InvalidateSession(InvalidateSessionMessage) returns (SuccessMessage) {}
 }
 
 message SuccessMessage {
@@ -23,30 +25,18 @@ message GetSessionMessage {
   string id = 1;
 }
 
-// enum NullValue {
-//   // Null value.
-//   NULL_VALUE = 0;
-// }
-
-// message Value {
-//   // The kind of value.
-//   oneof kind {
-//     // Represents a null value.
-//     NullValue null_value = 1;
-//     // Represents a double value.
-//     double number_value = 2;
-//     // Represents a string value.
-//     string string_value = 3;
-//     // Represents a boolean value.
-//     bool bool_value = 4;
-//   }
-// }
-
 
 message AddValueToSessionMessage {
   string id = 1; // session id
   string key = 2; // key in session
   google.protobuf.Value value = 3; // value
+  // Value value = 3;
+}
+
+
+message AddValuesToSessionMessage {
+  string id = 1; // session id
+  map<string, google.protobuf.Value> values = 3; // value
   // Value value = 3;
 }
 
@@ -63,4 +53,9 @@ message InvalidateSessionMessage {
 message InvalidateSessionValueMessage {
   string id = 1; // session id
   string key = 2; // key in session
+}
+
+message InvalidateSessionValuesMessage {
+  string id = 1; // session id
+  repeated string keys = 2; // key in session
 }
