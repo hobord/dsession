@@ -2,7 +2,7 @@
 // go get github.com/fullstorydev/grpcurl
 // go install github.com/fullstorydev/grpcurl/cmd/grpcurl
 /*
-
+// docker run -p 6379:6379 --name redis-redisjson redislabs/rejson:latest
 grpcurl.exe -plaintext localhost:50051 list
 
 grpcurl -plaintext -d '{"ttl":10}' localhost:50051 hobord.session.DSessionService/CreateSession
