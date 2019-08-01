@@ -9,7 +9,7 @@ service DSessionService {
   rpc AddValueToSession(AddValueToSessionMessage) returns (SessionResponse) {}
   rpc AddValuesToSession(AddValuesToSessionMessage) returns (SessionResponse) {}
   rpc InvalidateSessionValue(InvalidateSessionValueMessage) returns (SuccessMessage) {}
-  rpc InvalidateSessionValues(InvalidateSessionValueMessage) returns (SuccessMessage) {}
+  rpc InvalidateSessionValues(InvalidateSessionValuesMessage) returns (SuccessMessage) {}
   rpc InvalidateSession(InvalidateSessionMessage) returns (SuccessMessage) {}
 }
 

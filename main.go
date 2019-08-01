@@ -53,9 +53,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
+
 	s := grpc.NewServer()
 	reflection.Register(s)
-	pb.RegisterDSessionServiceServer(s, &pb.Server{
+	pb.RegisterDSessionServiceServer(s, &pb.GrpcServer{
 		RedisConnection: conn,
 		RedisJSON:       rh,
 	})
