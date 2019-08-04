@@ -5,6 +5,9 @@ import (
 	"errors"
 	fmt "fmt"
 	"log"
+	"os"
+	"strconv"
+	"time"
 
 	"encoding/json"
 
@@ -15,14 +18,96 @@ import (
 	uuid "github.com/satori/go.uuid"
 )
 
-// GrpcServer is used to implement session.
-type GrpcServer struct {
+// GrpcRedisImplServer is used to implement session.
+type GrpcRedisImplServer struct {
 	RedisConnection redis.Conn
 	RedisJSON       *rejson.Handler
 }
 
+func newRedisPool(server, password string, maxIdle int, idleTimeout int) *redis.Pool {
+	return &redis.Pool{
+		MaxIdle:     maxIdle,
+		IdleTimeout: time.Second * time.Duration(idleTimeout),
+		Dial: func() (redis.Conn, error) {
+			c, err := redis.Dial("tcp", server)
+			if err != nil {
+				return nil, err
+			}
+			if password != "" {
+				if _, err := c.Do("AUTH", password); err != nil {
+					c.Close()
+					return nil, err
+				}
+			}
+			return c, err
+		},
+		TestOnBorrow: func(c redis.Conn, t time.Time) error {
+			_, err := c.Do("PING")
+			return err
+		},
+	}
+}
+
+// CreateRedisImpl is create an instance of redis implementation of session grpc
+func CreateRedisImpl() *GrpcRedisImplServer {
+	//redis
+	// var addr = flag.String("Server", "localhost:6379", "Redis server address")
+	// flag.Parse()
+	rh := rejson.NewReJSONHandler()
+	rdHost := os.Getenv("REDIS_HOST")
+	if rdHost == "" {
+		rdHost = "localhost"
+	}
+	rdPort := os.Getenv("REDIS_PORT")
+	if rdPort == "" {
+		rdPort = "6379"
+	}
+
+	rdDbEnv := os.Getenv("REDIS_DB")
+	if rdDbEnv == "" {
+		rdDbEnv = "0"
+	}
+	rdDb, err := strconv.Atoi(rdDbEnv)
+	if err != nil {
+		log.Fatalf("Failed to connect parse redis-server DB (%s)", rdDbEnv)
+	}
+
+	password := os.Getenv("REDIS_PASSWORD")
+
+	maxIdleEnv := os.Getenv("REDIS_MAXIDLE")
+	if maxIdleEnv == "" {
+		maxIdleEnv = "3"
+	}
+	maxIdle, err := strconv.Atoi(maxIdleEnv)
+	if err != nil {
+		log.Fatalf("Failed to connect parse redis-server DB (%s)", rdDbEnv)
+	}
+
+	maxTimeOutEnv := os.Getenv("REDIS_MAXTIMEOUT")
+	if maxTimeOutEnv == "" {
+		maxTimeOutEnv = "240"
+	}
+	maxTimeOut, err := strconv.Atoi(maxTimeOutEnv)
+	if err != nil {
+		log.Fatalf("Failed to connect parse redis-server DB (%s)", rdDbEnv)
+	}
+
+	rediserver := rdHost + ":" + rdPort
+	// Redigo Client
+	RedisPool := newRedisPool(rediserver, password, maxIdle, maxTimeOut)
+	conn := RedisPool.Get()
+	log.Printf("Connecting to Redis (%s) DB=%d Success...", rediserver, rdDb)
+
+	rh.SetRedigoClient(conn)
+	impl := &GrpcRedisImplServer{
+		RedisConnection: conn,
+		RedisJSON:       rh,
+	}
+	return impl
+}
+
 // CreateSession is create a new empty session
-func (s *GrpcServer) CreateSession(ctx context.Context, in *CreateSessionMessage) (*SessionResponse, error) {
+func (s *GrpcRedisImplServer) CreateSession(ctx context.Context, in *CreateSessionMessage) (*SessionResponse, error) {
 	log.Printf("Received: %v", in.Ttl)
 	RedisConnection := s.RedisConnection
 	RedisJSON := s.RedisJSON
@@ -64,7 +149,7 @@ func (s *GrpcServer) CreateSession(ctx context.Context, in *CreateSessionMessage
 }
 
 // AddValueToSession is add value into the existing session
-func (s *GrpcServer) AddValueToSession(ctx context.Context, in *AddValueToSessionMessage) (*SessionResponse, error) {
+func (s *GrpcRedisImplServer) AddValueToSession(ctx context.Context, in *AddValueToSessionMessage) (*SessionResponse, error) {
 	RedisConnection := s.RedisConnection
 	RedisJSON := s.RedisJSON
 
@@ -93,7 +178,7 @@ func (s *GrpcServer) AddValueToSession(ctx context.Context, in *AddValueToSessio
 }
 
 // AddValuesToSession is add multiple values into the session
-func (s *GrpcServer) AddValuesToSession(ctx context.Context, in *AddValuesToSessionMessage) (*SessionResponse, error) {
+func (s *GrpcRedisImplServer) AddValuesToSession(ctx context.Context, in *AddValuesToSessionMessage) (*SessionResponse, error) {
 	var values map[string]*st.Value
 
 	for key, val := range in.Values {
@@ -113,7 +198,7 @@ func (s *GrpcServer) AddValuesToSession(ctx context.Context, in *AddValuesToSess
 }
 
 // GetSession return the session by id
-func (s *GrpcServer) GetSession(ctx context.Context, in *GetSessionMessage) (*SessionResponse, error) {
+func (s *GrpcRedisImplServer) GetSession(ctx context.Context, in *GetSessionMessage) (*SessionResponse, error) {
 	session, err := s.getValuesBySessionID(in.Id)
 	if err != nil {
 		var values map[string]*st.Value
@@ -124,7 +209,7 @@ func (s *GrpcServer) GetSession(ctx context.Context, in *GetSessionMessage) (*Se
 }
 
 // InvalidateSession is delete the session
-func (s *GrpcServer) InvalidateSession(ctx context.Context, in *InvalidateSessionMessage) (*SuccessMessage, error) {
+func (s *GrpcRedisImplServer) InvalidateSession(ctx context.Context, in *InvalidateSessionMessage) (*SuccessMessage, error) {
 	if s.RedisConnection != nil {
 		err := s.RedisConnection.Send("DEL", in.Id)
 		if err != nil {
@@ -136,7 +221,7 @@ func (s *GrpcServer) InvalidateSession(ctx context.Context, in *InvalidateSessio
 }
 
 // InvalidateSessionValue is remove one key from the session
-func (s *GrpcServer) InvalidateSessionValue(ctx context.Context, in *InvalidateSessionValueMessage) (*SuccessMessage, error) {
+func (s *GrpcRedisImplServer) InvalidateSessionValue(ctx context.Context, in *InvalidateSessionValueMessage) (*SuccessMessage, error) {
 
 	res, err := s.RedisJSON.JSONDel(in.Id, "."+in.Key)
 	if err != nil {
@@ -150,7 +235,7 @@ func (s *GrpcServer) InvalidateSessionValue(ctx context.Context, in *InvalidateS
 }
 
 // InvalidateSessionValues is remove multiple keys from the session
-func (s *GrpcServer) InvalidateSessionValues(ctx context.Context, in *InvalidateSessionValuesMessage) (*SuccessMessage, error) {
+func (s *GrpcRedisImplServer) InvalidateSessionValues(ctx context.Context, in *InvalidateSessionValuesMessage) (*SuccessMessage, error) {
 	for _, key := range in.Keys {
 		msg := InvalidateSessionValueMessage{Id: in.Id, Key: key}
 		_, err := s.InvalidateSessionValue(ctx, &msg)
@@ -162,7 +247,7 @@ func (s *GrpcServer) InvalidateSessionValues(ctx context.Context, in *Invalidate
 	return &SuccessMessage{Successfull: true}, nil
 }
 
-func (s *GrpcServer) getValuesBySessionID(id string) (*SessionResponse, error) {
+func (s *GrpcRedisImplServer) getValuesBySessionID(id string) (*SessionResponse, error) {
 	RedisJSON := s.RedisJSON
 	response := &SessionResponse{Id: id, Values: make(map[string]*st.Value)}
 	var jsonValue map[string]interface{}

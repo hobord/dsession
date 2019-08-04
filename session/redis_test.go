@@ -2,11 +2,20 @@ package session
 
 import (
 	"context"
+	"reflect"
 	"testing"
 )
 
+func TestCreateRedisImpl(t *testing.T) {
+	s := CreateRedisImpl()
+	st := reflect.TypeOf(s).String()
+	if st != "*session.GrpcRedisImplServer" {
+		t.Errorf("I Got %v", st)
+	}
+}
+
 func TestCreateSession(t *testing.T) {
-	s := GrpcServer{}
+	s := GrpcRedisImplServer{}
 
 	// set up test cases
 	tests := []struct {

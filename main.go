@@ -15,17 +15,14 @@ grpcurl -plaintext -d '{"id":"8f60aaef-a0bd-4c55-ab49-00c4ed5a4091"}'  localhost
 package main
 
 import (
-	"flag"
 	"fmt"
 	"log"
 	"net"
 
-	pb "github.com/hobord/dsession/session"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 
-	"github.com/gomodule/redigo/redis"
-	"github.com/nitishm/go-rejson"
+	pb "github.com/hobord/dsession/session"
 )
 
 const (
@@ -33,36 +30,18 @@ const (
 )
 
 func main() {
-
-	//redis
-	var addr = flag.String("Server", "localhost:6379", "Redis server address")
-	rh := rejson.NewReJSONHandler()
-	flag.Parse()
-	// Redigo Client
-	conn, err := redis.Dial("tcp", *addr)
-	if err != nil {
-		log.Fatalf("Failed to connect to redis-server @ %s", *addr)
-	}
-	defer func() {
-		err = conn.Close()
-		if err != nil {
-			log.Fatalf("Failed to communicate to redis-server @ %v", err)
-		}
-	}()
-	rh.SetRedigoClient(conn)
-
 	lis, err := net.Listen("tcp", port)
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
+	fmt.Println("Server listen: ", port)
 
 	s := grpc.NewServer()
 	reflection.Register(s)
-	pb.RegisterDSessionServiceServer(s, &pb.GrpcServer{
-		RedisConnection: conn,
-		RedisJSON:       rh,
-	})
-	fmt.Println("Server listen: ", port)
+
+	pbImpl := pb.CreateRedisImpl()
+	pb.RegisterDSessionServiceServer(s, pbImpl)
+
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}
