@@ -31,30 +31,34 @@ func (s *GrpcServer) CreateSession(ctx context.Context, in *CreateSessionMessage
 	var values map[string]*st.Value
 	if err != nil {
 		fmt.Printf("Something went wrong: %s", err)
-		return &SessionResponse{Id: "", Values: values}, err
+		return &SessionResponse{}, err
 	}
 
 	type emptySession struct {
 		data map[string]string
 	}
-	res, err := RedisJSON.JSONSet(uuid.String(), ".", emptySession{})
-	if err != nil {
-		return &SessionResponse{Id: "", Values: values}, err
-	}
-	if res.(string) != "OK" {
-		fmt.Println("Failed to Set into the Redis: ")
-		return &SessionResponse{Id: "", Values: values}, err
-	}
-
-	if in.Ttl > 0 {
-		ttlstr := fmt.Sprintf("%d", in.Ttl)
-		err := RedisConnection.Send("EXPIRE", uuid.String(), ttlstr)
+	if RedisJSON != nil {
+		res, err := RedisJSON.JSONSet(uuid.String(), ".", emptySession{})
 		if err != nil {
-			fmt.Printf("Something went wrong: %s", err)
-			return &SessionResponse{Id: "", Values: values}, err
+			return &SessionResponse{}, err
+		}
+		if res.(string) != "OK" {
+			fmt.Printf("Failed to Set into the Redis: %s", res.(string))
+			return &SessionResponse{}, err
 		}
 	}
-	RedisConnection.Flush()
+
+	if RedisConnection != nil {
+		if in.Ttl > 0 {
+			ttlstr := fmt.Sprintf("%d", in.Ttl)
+			err := RedisConnection.Send("EXPIRE", uuid.String(), ttlstr)
+			if err != nil {
+				fmt.Printf("Something went wrong: %s", err)
+				return &SessionResponse{}, err
+			}
+		}
+		RedisConnection.Flush()
+	}
 
 	return &SessionResponse{Id: uuid.String(), Values: values}, nil
 }
@@ -63,22 +67,26 @@ func (s *GrpcServer) CreateSession(ctx context.Context, in *CreateSessionMessage
 func (s *GrpcServer) AddValueToSession(ctx context.Context, in *AddValueToSessionMessage) (*SessionResponse, error) {
 	RedisConnection := s.RedisConnection
 	RedisJSON := s.RedisJSON
-	var values map[string]*st.Value
 
 	data := proto.MarshalTextString(in.Value)
-	res, err := RedisJSON.JSONSet(in.Id, "."+in.Key, data)
-	if err != nil {
-		return &SessionResponse{Id: "", Values: values}, err
+	if RedisJSON != nil {
+		res, err := RedisJSON.JSONSet(in.Id, "."+in.Key, data)
+		if err != nil {
+			return &SessionResponse{}, err
+		}
+		if res.(string) != "OK" {
+			fmt.Printf("Failed to Set into the Redis: %s", res.(string))
+			return &SessionResponse{}, err
+		}
 	}
-	if res.(string) != "OK" {
-		fmt.Println("Failed to Set into the Redis: ")
-		return &SessionResponse{Id: "", Values: values}, err
+
+	if RedisConnection != nil {
+		RedisConnection.Flush()
 	}
-	RedisConnection.Flush()
 
 	session, err := s.getValuesBySessionID(in.Id)
 	if err != nil {
-		return &SessionResponse{Id: "", Values: values}, err
+		return session, err
 	}
 
 	return session, nil
@@ -87,6 +95,7 @@ func (s *GrpcServer) AddValueToSession(ctx context.Context, in *AddValueToSessio
 // AddValuesToSession is add multiple values into the session
 func (s *GrpcServer) AddValuesToSession(ctx context.Context, in *AddValuesToSessionMessage) (*SessionResponse, error) {
 	var values map[string]*st.Value
+
 	for key, val := range in.Values {
 		msg := AddValueToSessionMessage{Id: in.Id, Key: key, Value: val}
 		_, err := s.AddValueToSession(ctx, &msg)
@@ -94,9 +103,10 @@ func (s *GrpcServer) AddValuesToSession(ctx context.Context, in *AddValuesToSess
 			return &SessionResponse{Id: "", Values: values}, err
 		}
 	}
+
 	session, err := s.getValuesBySessionID(in.Id)
 	if err != nil {
-		return &SessionResponse{Id: "", Values: values}, err
+		return session, err
 	}
 
 	return session, nil
@@ -115,16 +125,19 @@ func (s *GrpcServer) GetSession(ctx context.Context, in *GetSessionMessage) (*Se
 
 // InvalidateSession is delete the session
 func (s *GrpcServer) InvalidateSession(ctx context.Context, in *InvalidateSessionMessage) (*SuccessMessage, error) {
-	err := s.RedisConnection.Send("DEL", in.Id)
-	if err != nil {
-		fmt.Printf("Something went wrong: %s", err)
-		return &SuccessMessage{Successfull: false}, err
+	if s.RedisConnection != nil {
+		err := s.RedisConnection.Send("DEL", in.Id)
+		if err != nil {
+			fmt.Printf("Something went wrong: %s", err)
+			return &SuccessMessage{Successfull: false}, err
+		}
 	}
 	return &SuccessMessage{Successfull: true}, nil
 }
 
 // InvalidateSessionValue is remove one key from the session
 func (s *GrpcServer) InvalidateSessionValue(ctx context.Context, in *InvalidateSessionValueMessage) (*SuccessMessage, error) {
+
 	res, err := s.RedisJSON.JSONDel(in.Id, "."+in.Key)
 	if err != nil {
 		fmt.Printf("Something went wrong: %s", err)
@@ -156,22 +169,22 @@ func (s *GrpcServer) getValuesBySessionID(id string) (*SessionResponse, error) {
 
 	input, err := redis.Bytes(RedisJSON.JSONGet(id, "."))
 	if err != nil {
-		var values map[string]*st.Value
-		return &SessionResponse{Id: "", Values: values}, err
+		return response, err
 	}
 
-	json.Unmarshal(input, &jsonValue)
+	err = json.Unmarshal(input, &jsonValue)
+	if err != nil {
+		return response, err
+	}
 
-	for key, val := range jsonValue {
-		// fmt.Println(key)
-		json := val.(string)
-		// fmt.Println(json)
-		v := st.Value{}
-		err := proto.UnmarshalText(json, &v)
+	for key, v := range jsonValue {
+		json := v.(string)
+		val := st.Value{}
+		err := proto.UnmarshalText(json, &val)
 		if err != nil {
-			fmt.Println(err)
+			return response, err
 		}
-		response.Values[key] = &v
+		response.Values[key] = &val
 	}
 
 	return response, nil
