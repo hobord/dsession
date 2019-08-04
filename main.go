@@ -6,7 +6,9 @@
 grpcurl.exe -plaintext localhost:50051 list
 
 grpcurl -plaintext -d '{"ttl":10}' localhost:50051 hobord.session.DSessionService/CreateSession
-grpcurl -plaintext -d '{"id":"746b8deb-2629-4318-9a0d-1928798e85ad", "key":"foo", "value": {"numberValue": 15}}' localhost:50051 hobord.session.DSessionService/AddValueToSession
+grpcurl -plaintext -d '{"ttl":0}' localhost:50051 hobord.session.DSessionService/CreateSession
+grpcurl -plaintext -d '{"id":"8f60aaef-a0bd-4c55-ab49-00c4ed5a4091", "key":"foo", "value": {"numberValue": 15}}' localhost:50051 hobord.session.DSessionService/AddValueToSession
+grpcurl -plaintext -d '{"id":"8f60aaef-a0bd-4c55-ab49-00c4ed5a4091"}'  localhost:50051 hobord.session.DSessionService/GetSession
 
 */
 

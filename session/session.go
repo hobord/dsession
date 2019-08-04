@@ -8,6 +8,7 @@ import (
 
 	"encoding/json"
 
+	proto "github.com/golang/protobuf/proto"
 	st "github.com/golang/protobuf/ptypes/struct"
 	"github.com/gomodule/redigo/redis"
 	"github.com/nitishm/go-rejson"
@@ -46,7 +47,7 @@ func (s *GrpcServer) CreateSession(ctx context.Context, in *CreateSessionMessage
 	}
 
 	if in.Ttl > 0 {
-		ttlstr := fmt.Sprintf("%d", in.Ttl)
+		// ttlstr := fmt.Sprintf("%d", in.Ttl)
 		err := RedisConnection.Send("EXPIRE", uuid.String(), ttlstr)
 		if err != nil {
 			fmt.Printf("Something went wrong: %s", err)
@@ -64,7 +65,8 @@ func (s *GrpcServer) AddValueToSession(ctx context.Context, in *AddValueToSessio
 	RedisJSON := s.RedisJSON
 	var values map[string]*st.Value
 
-	res, err := RedisJSON.JSONSet(in.Id, "."+in.Key, in.Value)
+	data := proto.MarshalTextString(in.Value)
+	res, err := RedisJSON.JSONSet(in.Id, "."+in.Key, data)
 	if err != nil {
 		return &SessionResponse{Id: "", Values: values}, err
 	}
@@ -160,9 +162,16 @@ func (s *GrpcServer) getValuesBySessionID(id string) (*SessionResponse, error) {
 
 	json.Unmarshal(input, &jsonValue)
 
-	for key := range jsonValue {
-		fmt.Println(key)
-		response.Values[key] = ToValue(jsonValue[key])
+	for key, val := range jsonValue {
+		// fmt.Println(key)
+		json := val.(string)
+		// fmt.Println(json)
+		v := st.Value{}
+		err := proto.UnmarshalText(json, &v)
+		if err != nil {
+			fmt.Println(err)
+		}
+		response.Values[key] = &v
 	}
 
 	return response, nil
