@@ -47,7 +47,7 @@ func (s *GrpcServer) CreateSession(ctx context.Context, in *CreateSessionMessage
 	}
 
 	if in.Ttl > 0 {
-		// ttlstr := fmt.Sprintf("%d", in.Ttl)
+		ttlstr := fmt.Sprintf("%d", in.Ttl)
 		err := RedisConnection.Send("EXPIRE", uuid.String(), ttlstr)
 		if err != nil {
 			fmt.Printf("Something went wrong: %s", err)
