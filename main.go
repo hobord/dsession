@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"os"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
@@ -25,11 +26,11 @@ import (
 	pb "github.com/hobord/dsession/session"
 )
 
-const (
-	port = ":50051"
-)
-
 func main() {
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = ":50051"
+	}
 	lis, err := net.Listen("tcp", port)
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)

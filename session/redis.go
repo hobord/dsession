@@ -96,12 +96,25 @@ func CreateRedisImpl() *GrpcRedisImplServer {
 
 // CreateSession is create a new empty session
 func (s *GrpcRedisImplServer) CreateSession(ctx context.Context, in *CreateSessionMessage) (*SessionResponse, error) {
+	conn := s.RedisPool.Get()
 	uuid, err := uuid.NewV4()
 	if err != nil {
 		return &SessionResponse{}, err
 	}
-	var values map[string]*st.Value
+	if in.Ttl > 0 {
+		ttlstr := fmt.Sprintf("%d", in.Ttl)
+		err = s.addValueToSession(conn, uuid.String(), "__TTL", ttlstr)
+		if err != nil {
+			return &SessionResponse{}, err
+		}
+		conn.Send("EXPIRE", uuid.String(), ttlstr)
+		err = conn.Flush()
+		if err != nil {
+			return &SessionResponse{}, err
+		}
+	}
 
+	var values map[string]*st.Value
 	return &SessionResponse{Id: uuid.String(), Values: values}, nil
 }
 
@@ -231,13 +244,15 @@ func (s *GrpcRedisImplServer) getValuesBySessionID(conn redis.Conn, id string) (
 	}
 
 	for key, hval := range values {
-		val := st.Value{}
-		err := proto.UnmarshalText(hval, &val)
-		if err != nil {
-			return response, err
-		}
+		if key != "__TTL" {
+			val := st.Value{}
+			err := proto.UnmarshalText(hval, &val)
+			if err != nil {
+				return response, err
+			}
 
-		response.Values[key] = &val
+			response.Values[key] = &val
+		}
 	}
 
 	return response, nil
