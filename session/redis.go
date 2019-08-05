@@ -98,6 +98,7 @@ func CreateRedisImpl() *GrpcRedisImplServer {
 // CreateSession is create a new empty session
 func (s *GrpcRedisImplServer) CreateSession(ctx context.Context, in *CreateSessionMessage) (*SessionResponse, error) {
 	conn := s.RedisPool.Get()
+	defer conn.Close()
 	uuid, err := uuid.NewV4()
 	if err != nil {
 		return &SessionResponse{}, err
@@ -109,23 +110,30 @@ func (s *GrpcRedisImplServer) CreateSession(ctx context.Context, in *CreateSessi
 			return &SessionResponse{}, err
 		}
 		conn.Send("EXPIRE", uuid.String(), ttlstr)
-		err = conn.Flush()
+	} else {
+		err = s.addValueToSession(conn, uuid.String(), "__TTL", "0")
 		if err != nil {
 			return &SessionResponse{}, err
 		}
 	}
 
+	err = conn.Flush()
+	if err != nil {
+		return &SessionResponse{}, err
+	}
 	var values map[string]*st.Value
 	return &SessionResponse{Id: uuid.String(), Values: values}, nil
 }
 
 func (s *GrpcRedisImplServer) addValueToSession(conn redis.Conn, id, key, value string) error {
-	res, err := redis.StringMap(conn.Do("HGETALL", id))
-	if err != nil {
-		return err
-	}
-	if len(res) == 0 {
-		return errors.New("Session already go on...")
+	if key != "__TTL" {
+		res, err := redis.StringMap(conn.Do("HGETALL", id))
+		if err != nil {
+			return err
+		}
+		if len(res) == 0 {
+			return errors.New("Session already go on...")
+		}
 	}
 	return conn.Send("HSET", id, key, value)
 }
@@ -133,6 +141,7 @@ func (s *GrpcRedisImplServer) addValueToSession(conn redis.Conn, id, key, value 
 // AddValueToSession is add value into the existing session
 func (s *GrpcRedisImplServer) AddValueToSession(ctx context.Context, in *AddValueToSessionMessage) (*SessionResponse, error) {
 	conn := s.RedisPool.Get()
+	defer conn.Close()
 
 	data := proto.MarshalTextString(in.Value)
 	err := s.addValueToSession(conn, in.Id, in.Key, data)
@@ -155,6 +164,7 @@ func (s *GrpcRedisImplServer) AddValueToSession(ctx context.Context, in *AddValu
 // AddValuesToSession is add multiple values into the session
 func (s *GrpcRedisImplServer) AddValuesToSession(ctx context.Context, in *AddValuesToSessionMessage) (*SessionResponse, error) {
 	conn := s.RedisPool.Get()
+	defer conn.Close()
 	var values map[string]*st.Value
 
 	for key, val := range in.Values {
@@ -180,6 +190,7 @@ func (s *GrpcRedisImplServer) AddValuesToSession(ctx context.Context, in *AddVal
 // GetSession return the session by id
 func (s *GrpcRedisImplServer) GetSession(ctx context.Context, in *GetSessionMessage) (*SessionResponse, error) {
 	conn := s.RedisPool.Get()
+	defer conn.Close()
 	session, err := s.getValuesBySessionID(conn, in.Id)
 	if err != nil {
 		var values map[string]*st.Value
@@ -192,6 +203,7 @@ func (s *GrpcRedisImplServer) GetSession(ctx context.Context, in *GetSessionMess
 // InvalidateSession is delete the session
 func (s *GrpcRedisImplServer) InvalidateSession(ctx context.Context, in *InvalidateSessionMessage) (*SuccessMessage, error) {
 	conn := s.RedisPool.Get()
+	defer conn.Close()
 	err := conn.Send("DEL", in.Id)
 	if err != nil {
 		fmt.Printf("Something went wrong: %s", err)
@@ -212,6 +224,7 @@ func (s *GrpcRedisImplServer) invalidateSessionValue(conn redis.Conn, id string,
 // InvalidateSessionValue is remove one key from the session
 func (s *GrpcRedisImplServer) InvalidateSessionValue(ctx context.Context, in *InvalidateSessionValueMessage) (*SuccessMessage, error) {
 	conn := s.RedisPool.Get()
+	defer conn.Close()
 	err := s.invalidateSessionValue(conn, in.Id, in.Key)
 	if err != nil {
 		fmt.Printf("Something went wrong: %s", err)
@@ -228,6 +241,7 @@ func (s *GrpcRedisImplServer) InvalidateSessionValue(ctx context.Context, in *In
 // InvalidateSessionValues is remove multiple keys from the session
 func (s *GrpcRedisImplServer) InvalidateSessionValues(ctx context.Context, in *InvalidateSessionValuesMessage) (*SuccessMessage, error) {
 	conn := s.RedisPool.Get()
+	defer conn.Close()
 	for _, key := range in.Keys {
 		err := s.invalidateSessionValue(conn, in.Id, key)
 		if err != nil {
