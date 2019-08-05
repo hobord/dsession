@@ -2,6 +2,7 @@ package session
 
 import (
 	"context"
+	"errors"
 	fmt "fmt"
 	"log"
 	"os"
@@ -119,6 +120,13 @@ func (s *GrpcRedisImplServer) CreateSession(ctx context.Context, in *CreateSessi
 }
 
 func (s *GrpcRedisImplServer) addValueToSession(conn redis.Conn, id, key, value string) error {
+	res, err := redis.StringMap(conn.Do("HGETALL", id))
+	if err != nil {
+		return err
+	}
+	if len(res) == 0 {
+		return errors.New("Session already go on...")
+	}
 	return conn.Send("HSET", id, key, value)
 }
 
