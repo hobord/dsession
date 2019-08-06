@@ -15,6 +15,13 @@ spec:
       imagePullSecrets:
       - name: regcred
       containers:
+      - image: redis:5-alpine
+        name: redis
+        resources: {}
+        ports:
+        - containerPort: 6379
+          name: redis
+          protocol: TCP
       - image: sagadash/grpc-web-proxy
         args: [ 
           "--run_tls_server=false",
@@ -34,8 +41,37 @@ spec:
       - image: hobord/dsession
         imagePullPolicy: Always
         name: dsession
+        env:
+          - name: REDIS_HOST
+            value: redis
+          - name: REDIS_PORT
+            value: "6379"
         resources: {}
         ports:
         - containerPort: 50051
           name: grpc
           protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dsession
+spec:
+  selector:
+    app: dsession
+  ports:
+  - name: grpc
+    protocol: TCP
+    port: 50051
+  - name: http
+    protocol: TCP
+    port: 80
+  - name: https
+    protocol: TCP
+    port: 443
+  - name: redis
+    protocol: TCP
+    port: 6379
+  type: NodePort
+  
+---
