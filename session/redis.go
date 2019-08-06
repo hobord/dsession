@@ -193,8 +193,7 @@ func (s *GrpcRedisImplServer) GetSession(ctx context.Context, in *GetSessionMess
 	defer conn.Close()
 	session, err := s.getValuesBySessionID(conn, in.Id)
 	if err != nil {
-		var values map[string]*st.Value
-		return &SessionResponse{Id: "", Values: values}, err
+		return &SessionResponse{}, err
 	}
 
 	return session, nil
