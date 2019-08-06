@@ -11,7 +11,7 @@ RUN go build -o server
 
 # final stage
 FROM alpine
-WORKDIR /app/public/
+WORKDIR /app/
 COPY --from=build-env /go/src/app/server /app/
 
 EXPOSE 50051

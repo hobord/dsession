@@ -12,8 +12,6 @@ spec:
       labels:
         app: dsession
     spec:
-      imagePullSecrets:
-      - name: regcred
       containers:
       - image: redis:5-alpine
         name: redis
@@ -22,14 +20,14 @@ spec:
         - containerPort: 6379
           name: redis
           protocol: TCP
-      - image: sagadash/grpc-web-proxy
-        args: [ 
-          "--run_tls_server=false",
+      - image: hobord/grpc-web-proxy
+        command: [ "/app/grpcwebproxy", 
           "--backend_addr=dsession:50051",
+          "--run_tls_server=false",
           "--backend_max_call_recv_msg_size=5242880",
           "--allow_all_origins"
         ]
-        name:  webproxy
+        name: webproxy
         resources: {}
         ports:
         - containerPort: 80
@@ -73,5 +71,4 @@ spec:
     protocol: TCP
     port: 6379
   type: NodePort
-  
----
+
