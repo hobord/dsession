@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dsession
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dsession
+  template:
+    metadata:
+      labels:
+        app: dsession
+    spec:
+      imagePullSecrets:
+      - name: regcred
+      containers:
+      - image: sagadash/grpc-web-proxy
+        args: [ 
+          "--run_tls_server=false",
+          "--backend_addr=dsession:50051",
+          "--backend_max_call_recv_msg_size=5242880",
+          "--allow_all_origins"
+        ]
+        name:  webproxy
+        resources: {}
+        ports:
+        - containerPort: 80
+          name: http
+          protocol: TCP
+        - containerPort: 443
+          name: https
+          protocol: TCP
+      - image: hobord/dsession
+        imagePullPolicy: Always
+        name: dsession
+        resources: {}
+        ports:
+        - containerPort: 50051
+          name: grpc
+          protocol: TCP
