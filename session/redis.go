@@ -12,7 +12,8 @@ import (
 	proto "github.com/golang/protobuf/proto"
 	st "github.com/golang/protobuf/ptypes/struct"
 	"github.com/gomodule/redigo/redis"
-	uuid "github.com/satori/go.uuid"
+
+	uuid "github.com/google/uuid"
 )
 
 // GrpcRedisImplServer is used to implement session.
@@ -46,6 +47,7 @@ func newRedisPool(server, password string, maxIdle int, idleTimeout int) *redis.
 
 // CreateRedisImpl is create an instance of redis implementation of session grpc
 func CreateRedisImpl() *GrpcRedisImplServer {
+	var err error
 	rdHost := os.Getenv("REDIS_HOST")
 	if rdHost == "" {
 		rdHost = "localhost"
@@ -97,12 +99,10 @@ func CreateRedisImpl() *GrpcRedisImplServer {
 
 // CreateSession is create a new empty session
 func (s *GrpcRedisImplServer) CreateSession(ctx context.Context, in *CreateSessionMessage) (*SessionResponse, error) {
+	var err error
 	conn := s.RedisPool.Get()
 	defer conn.Close()
-	uuid, err := uuid.NewV4()
-	if err != nil {
-		return &SessionResponse{}, err
-	}
+	uuid := uuid.New()
 	if in.Ttl > 0 {
 		ttlstr := fmt.Sprintf("%d", in.Ttl)
 		err = s.addValueToSession(conn, uuid.String(), "__TTL", ttlstr)
@@ -140,11 +140,12 @@ func (s *GrpcRedisImplServer) addValueToSession(conn redis.Conn, id, key, value 
 
 // AddValueToSession is add value into the existing session
 func (s *GrpcRedisImplServer) AddValueToSession(ctx context.Context, in *AddValueToSessionMessage) (*SessionResponse, error) {
+	var err error
 	conn := s.RedisPool.Get()
 	defer conn.Close()
 
 	data := proto.MarshalTextString(in.Value)
-	err := s.addValueToSession(conn, in.Id, in.Key, data)
+	err = s.addValueToSession(conn, in.Id, in.Key, data)
 	if err != nil {
 		return &SessionResponse{}, err
 	}
